@@ -38,39 +38,6 @@ initializer_kernel = normal(mean=0, stddev=2)
 initializer_bias = normal(mean=0, stddev=2)
 
 
-if __name__== "__main__":
-    # Adjacency matrix definition: using random binary lower triangular matirx
-    C = np.random.randint(low = 0, high = 2, size = [M,M]) 
-    C = np.tril(C,-1)   # sample only lower traingular portion to make it a DAG
-    C[1,0] = 1
-    T2 = int(T/2)
-    
-    GTmodels = []
-    inputDataOneHot = generate_dataset_one_hot(M,N,T,C,GTmodels)
-    
-    traineeModels = []
-    train_MLPs(M,N,int(T/2),C,traineeModels,inputDataOneHot[:T2,:])
-    
-    # derive soft intervention data using a new random MLP for the intervention node
-    intvn_var = range(M)
-    num_interventions = len(intvn_var)
-    I_N_pred = np.zeros(num_interventions)
-    
-    for intvn in range(num_interventions):
-        print('Intervention on model', intvn_var[intvn])
-    
-        intvnDataOneHot = inputDataOneHot[T2:,:].copy()
-        apply_soft_intervention(M,N,T2,C,intvnDataOneHot,intvn_var[intvn])
-    
-        I_N_pred[intvn] = predict_intervention(M,N,T2,intvnDataOneHot,traineeModels)
-    
-        print('Predicted intervention on model', I_N_pred[intvn])
-    
-    print('Actual intervention', intvn_var)
-    print('Predicted intervention', I_N_pred)
-
-
-
 def get_MLP(isTraineeMLP, *numNodesList):
     MLP = Sequential()
 
@@ -86,12 +53,13 @@ def get_MLP(isTraineeMLP, *numNodesList):
     for l in range(numLayers-1):
         if isTraineeMLP:
             MLP.add(Dense(numNodesList[l+1],input_dim=numNodesList[l]))
+            #MLP.add(Dropout(0.1))
         else:
             MLP.add(Dense(numNodesList[l+1],
                           input_dim=numNodesList[l],
                           kernel_initializer=initializer_kernel,
                           bias_initializer=initializer_bias))
-        MLP.add(LeakyReLU(alpha=0.1))
+            MLP.add(LeakyReLU(alpha=0.1))
 
     # output layer
     if isTraineeMLP:
@@ -157,7 +125,7 @@ def train_MLPs(M,N,T,C,traineeModels,inpOneHot):
     T0 = T - T1
     batch = int(T0 / 100)
 
-    es = EarlyStopping(monitor='loss')
+    es = EarlyStopping(monitor='loss', min_delta=1e-6, patience=3)
     
     for m_index in range(M):    #create a MLP for each variable
         print('trainee model', m_index)
@@ -225,3 +193,34 @@ def apply_soft_intervention(M,N,T,C,intvnDataOneHot,intvn_var):
         intvnDataOneHot[range(T),m_index*N+output] = 1
 
 
+
+if __name__== "__main__":
+    # Adjacency matrix definition: using random binary lower triangular matirx
+    C = np.random.randint(low = 0, high = 2, size = [M,M]) 
+    C = np.tril(C,-1)   # sample only lower traingular portion to make it a DAG
+    C[1,0] = 1
+    T2 = int(T/2)
+    
+    GTmodels = []
+    inputDataOneHot = generate_dataset_one_hot(M,N,T,C,GTmodels)
+    
+    traineeModels = []
+    train_MLPs(M,N,int(T/2),C,traineeModels,inputDataOneHot[:T2,:])
+    
+    # derive soft intervention data using a new random MLP for the intervention node
+    intvn_var = range(M)
+    num_interventions = len(intvn_var)
+    I_N_pred = np.zeros(num_interventions)
+    
+    for intvn in range(num_interventions):
+        print('Intervention on model', intvn_var[intvn])
+    
+        intvnDataOneHot = inputDataOneHot[T2:,:].copy()
+        apply_soft_intervention(M,N,T2,C,intvnDataOneHot,intvn_var[intvn])
+    
+        I_N_pred[intvn] = predict_intervention(M,N,T2,intvnDataOneHot,traineeModels)
+    
+        print('Predicted intervention on model', I_N_pred[intvn])
+    
+    print('Actual intervention', intvn_var)
+    print('Predicted intervention', I_N_pred)
